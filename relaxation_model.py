@@ -47,11 +47,11 @@ class Model:
 
     def _impose_boundary(self, potential):
         (n, m) = potential.shape
-        # all sides
+        # all sides - zero derivative
         potential[:, 0:1] = potential[:, 1:2]
-        potential[n - 1 : n, 0:1] = potential[n - 1 : n, 1:2]
-        potential[0:1, :] = potential[0:1, :]
-        potential[0:1, m - 1 : m] = potential[0:1, m - 1 : m]
+        potential[:, n - 1 : n] = potential[:, n - 2 : n - 1]
+        potential[0:1, :] = potential[1:2, :]
+        potential[m - 1 : m, :] = potential[m - 2 : m - 1, :]
         # left corner
         potential[n // 4 : 3 * n // 4, 0:1] = (
             potential[n // 4 : 3 * n // 4, 1:2] - self._delta_x * 100
@@ -60,30 +60,71 @@ class Model:
         potential[:, n - 1 : n] = potential[:, n - 2 : n - 1] + self._delta_x * 100 / 2
 
     def _get_velocity(self, potential):
+        x_velocity = self._get_x_velocity(potential)
+        y_velocity = self._get_y_velocity(potential)
+        return x_velocity, y_velocity
+
+    def _get_x_velocity(self, potential):
         (n, m) = potential.shape
-        velocity = np.zeros((n, m))
+        x_velocity = np.zeros((n, m))
         for x in range(n):
             for y in range(m):
                 if x == 0:
-                    velocity[y, x] = (
+                    x_velocity[y, x] = (
                         potential[y, x + 1] - potential[y, x]
                     ) / self._delta_x
                 elif x == n - 1:
-                    velocity[y, x] = (
-                        potential[y, x] - potential[y, x-1]
+                    x_velocity[y, x] = (
+                        potential[y, x] - potential[y, x - 1]
                     ) / self._delta_x
                 else:
-                    velocity[y, x] = (potential[y, x + 1] - potential[y, x-1]) / (
+                    x_velocity[y, x] = (potential[y, x + 1] - potential[y, x - 1]) / (
                         2 * self._delta_x
                     )
-        return velocity
+        return x_velocity
+
+    def _get_y_velocity(self, potential):
+        (n, m) = potential.shape
+        y_velocity = np.zeros((n, m))
+        for x in range(n):
+            for y in range(m):
+                if y == 0:
+                    y_velocity[y, x] = (
+                        potential[y + 1, x] - potential[y, x]
+                    ) / self._delta_x
+                elif y == m - 1:
+                    y_velocity[y, x] = (
+                        potential[y, x] - potential[y - 1, x]
+                    ) / self._delta_x
+                else:
+                    y_velocity[y, x] = (potential[y + 1, x] - potential[y - 1, x]) / (
+                        2 * self._delta_x
+                    )
+        return y_velocity
 
 
 def main():
-    model = Model(100)
-    potential, velocity = model.solve()
-    plt.imshow(velocity, cmap="hot", interpolation="nearest")
+    model = Model(50)
+    potential, (x_velocity, y_velocity) = model.solve()
+    plt.imshow(potential, cmap="hot", interpolation="nearest")
     plt.colorbar()
+    # plt.show()
+    _plot_velocity_field(x_velocity, y_velocity)
+
+
+def _plot_velocity_field(x_velocity, y_velocity):
+    x_data = []
+    y_data = []
+    u_data = []
+    v_data = []
+    (n, m) = x_velocity.shape
+    for x in range(n):
+        for y in range(m):
+            x_data.append(x)
+            y_data.append(y)
+            u_data.append(y_velocity[y, x])
+            v_data.append(x_velocity[y, x])
+    plt.quiver(x_data, y_data, v_data, u_data)
     plt.show()
 
 
