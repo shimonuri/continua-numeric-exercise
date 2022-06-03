@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import dataclasses
+from enum import Enum
 
 BOX_SIZE = 50
 
@@ -10,6 +11,12 @@ class Square:
     x_pos: int
     y_pos: int
     size: int
+
+
+class Mode(Enum):
+    EMPTY = "EMPTY"
+    BOX = "BOX"
+    NARROW = "NARROW"
 
 
 class Model:
@@ -162,41 +169,107 @@ class Model:
 
 
 def main():
-    squares = [Square(x_pos=20, y_pos=35, size=BOX_SIZE // 10)]
-    model = Model(BOX_SIZE, squares=squares)
-    potential, (x_velocity, y_velocity) = model.solve()
+    (
+        potential_no_square,
+        squares,
+        x_velocity_no_square,
+        y_velocity_no_square,
+    ) = get_model_result(Mode.EMPTY)
+    potential, squares, x_velocity, y_velocity = get_model_result(Mode.NARROW)
     plt.imshow(potential, cmap="hot", interpolation="nearest")
     plt.colorbar()
-    # plt.show()
     _plot_velocity_field(x_velocity, y_velocity)
-    _plot_y_axis_kinetic_energy(BOX_SIZE // 2, x_velocity, y_velocity)
-    _plot_x_axis_kinetic_energy(BOX_SIZE // 2, x_velocity, y_velocity)
+    _plot_x_axis_kinetic_energy(
+        BOX_SIZE // 2, x_velocity, y_velocity, show=False, name="narrow"
+    )
+    _plot_x_axis_kinetic_energy(
+        BOX_SIZE // 2,
+        x_velocity_no_square,
+        y_velocity_no_square,
+        show=True,
+        name="empty",
+    )
+
+    _plot_y_axis_kinetic_energy(
+        BOX_SIZE // 2, x_velocity, y_velocity, show=False, name="narrow"
+    )
+    _plot_y_axis_kinetic_energy(
+        BOX_SIZE // 2,
+        x_velocity_no_square,
+        y_velocity_no_square,
+        show=True,
+        name="empty",
+    )
+    _plot_force_square(squares[0], x_velocity)
 
 
-def _plot_y_axis_kinetic_energy(y, x_velocity, y_velocity):
+def get_model_result(mode):
+    if mode == Mode.BOX:
+        squares = [Square(x_pos=20, y_pos=35, size=BOX_SIZE // 10)]
+    elif mode == Mode.EMPTY:
+        squares = []
+    elif mode == Mode.NARROW:
+        squares = []
+        for y in range(20,30):
+            squares.append(Square(x_pos=25, y_pos=y, size=2))
+    else:
+        raise RuntimeError(f"Invalid was given {mode}")
+
+    model = Model(BOX_SIZE, squares=squares)
+    potential, (x_velocity, y_velocity) = model.solve()
+    return potential, squares, x_velocity, y_velocity
+
+
+def _plot_force_square(square, x_velocity):
+    force = []
+    x = square.x_pos - 1
+
+    average_velocity = np.average(
+        [
+            x_velocity[y, x]
+            for y in range(
+                BOX_SIZE - square.y_pos - square.size - 1, BOX_SIZE - square.y_pos,
+            )
+        ]
+    )
+    for y in range(square.y_pos, square.y_pos + square.size + 1):
+        force.append((average_velocity - x_velocity[y, x]) ** 2)
+
+    plt.title("Force versus Y position", fontsize=20)
+    plt.xlabel("Y position", fontsize=15)
+    plt.ylabel("Force", fontsize=15)
+    plt.plot(force)
+    plt.show()
+
+
+def _plot_y_axis_kinetic_energy(y, x_velocity, y_velocity, name, show):
     (n, m) = x_velocity.shape
     kinetic = []
     for x in range(m):
         kinetic.append((1 / 2) * (x_velocity[y, x] ** 2 + y_velocity[y, x] ** 2))
 
-    plt.title("Kinetic Energy versus Y position", fontsize=20)
-    plt.xlabel("Y position", fontsize=15)
+    plt.title("Kinetic Energy versus X position", fontsize=20)
+    plt.xlabel("X position", fontsize=15)
     plt.ylabel("Kinetic Energy", fontsize=15)
-    plt.plot(range(n), kinetic)
-    plt.show()
+    plt.plot(range(n), kinetic, label=name)
+    if show:
+        plt.legend()
+        plt.show()
 
 
-def _plot_x_axis_kinetic_energy(x, x_velocity, y_velocity):
+def _plot_x_axis_kinetic_energy(x, x_velocity, y_velocity, show, name):
     (n, m) = x_velocity.shape
     kinetic = []
     for y in range(n):
         kinetic.append((1 / 2) * (x_velocity[y, x] ** 2 + y_velocity[y, x] ** 2))
 
-    plt.title("Kinetic Energy versus X position", fontsize=20)
-    plt.xlabel("X position", fontsize=15)
+    plt.title("Kinetic Energy versus Y position", fontsize=20)
+    plt.xlabel("Y position", fontsize=15)
     plt.ylabel("Kinetic Energy", fontsize=15)
-    plt.plot(range(m), kinetic)
-    plt.show()
+    plt.plot(range(m), kinetic, label=name)
+    if show:
+        plt.show()
+        plt.legend()
 
 
 def _plot_velocity_field(x_velocity, y_velocity):
