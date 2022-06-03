@@ -1,12 +1,31 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import dataclasses
+
+BOX_SIZE = 50
+
+
+@dataclasses.dataclass
+class Square:
+    x_pos: int
+    y_pos: int
+    size: int
 
 
 class Model:
-    def __init__(self, size, max_diff=0.00001, start_value=1, max_iter=100000):
+    def __init__(
+        self, size, max_diff=0.0000001, start_value=1, max_iter=10000, squares=None
+    ):
+        if not squares:
+            squares = []
+
+        self._size = size
         self._current_potential = np.ones((size, size)) * start_value
         self._delta_x = 1 / size
         self._impose_boundary(self._current_potential)
+        self._set_init_values(self._current_potential)
+        self._squares = squares
+        self._put_squares(self._current_potential)
         self._max_diff = max_diff
         self._max_iter = max_iter
 
@@ -41,9 +60,35 @@ class Model:
             + self.current_potential[1 : n - 1, 2:m]
         ) / 4
         self._impose_boundary(new_potential)
+        self._put_squares(new_potential)
         max_diff = np.max(np.abs(new_potential - self.current_potential))
         self._current_potential = new_potential
         return max_diff
+
+    def _put_squares(self, potential):
+        for square in self._squares:
+            self._put_square(potential, square.x_pos, square.y_pos, square.size)
+
+    def _put_square(self, potential, x_pos, y_pos, length):
+        potential[y_pos : y_pos + length, x_pos : x_pos + length] = np.zeros(
+            (length, length)
+        )
+        potential[y_pos : y_pos + length, x_pos] = potential[
+            y_pos : y_pos + length, x_pos - 1
+        ]
+        potential[y_pos : y_pos + length, x_pos + length] = potential[
+            y_pos : y_pos + length, x_pos + length + 1
+        ]
+        potential[y_pos, x_pos : x_pos + length] = potential[
+            y_pos - 1, x_pos : x_pos + length
+        ]
+        potential[y_pos + length, x_pos : x_pos + length] = potential[
+            y_pos + length + 1, x_pos : x_pos + length
+        ]
+
+    def _set_init_values(self, potential):
+        (n, m) = potential.shape
+        potential[0 : n // 4, 0 : m // 3] = np.zeros((n // 4, m // 3))
 
     def _impose_boundary(self, potential):
         (n, m) = potential.shape
@@ -64,11 +109,22 @@ class Model:
         y_velocity = self._get_y_velocity(potential)
         return x_velocity, y_velocity
 
+    def _should_skip_print(self, x, y):
+        for square in self._squares:
+            if x in range(square.x_pos, square.x_pos + square.size + 1) and y in range(
+                square.y_pos, square.y_pos + square.size + 1
+            ):
+                return True
+
+        return False
+
     def _get_x_velocity(self, potential):
         (n, m) = potential.shape
         x_velocity = np.zeros((n, m))
         for x in range(n):
             for y in range(m):
+                if self._should_skip_print(x, y):
+                    continue
                 if x == 0:
                     x_velocity[y, x] = (
                         potential[y, x + 1] - potential[y, x]
@@ -88,6 +144,8 @@ class Model:
         y_velocity = np.zeros((n, m))
         for x in range(n):
             for y in range(m):
+                if self._should_skip_print(x, y):
+                    continue
                 if y == 0:
                     y_velocity[y, x] = (
                         potential[y + 1, x] - potential[y, x]
@@ -104,12 +162,41 @@ class Model:
 
 
 def main():
-    model = Model(50)
+    squares = [Square(x_pos=20, y_pos=35, size=BOX_SIZE // 10)]
+    model = Model(BOX_SIZE, squares=squares)
     potential, (x_velocity, y_velocity) = model.solve()
     plt.imshow(potential, cmap="hot", interpolation="nearest")
     plt.colorbar()
     # plt.show()
     _plot_velocity_field(x_velocity, y_velocity)
+    _plot_y_axis_kinetic_energy(BOX_SIZE // 2, x_velocity, y_velocity)
+    _plot_x_axis_kinetic_energy(BOX_SIZE // 2, x_velocity, y_velocity)
+
+
+def _plot_y_axis_kinetic_energy(y, x_velocity, y_velocity):
+    (n, m) = x_velocity.shape
+    kinetic = []
+    for x in range(m):
+        kinetic.append((1 / 2) * (x_velocity[y, x] ** 2 + y_velocity[y, x] ** 2))
+
+    plt.title("Kinetic Energy versus Y position", fontsize=20)
+    plt.xlabel("Y position", fontsize=15)
+    plt.ylabel("Kinetic Energy", fontsize=15)
+    plt.plot(range(n), kinetic)
+    plt.show()
+
+
+def _plot_x_axis_kinetic_energy(x, x_velocity, y_velocity):
+    (n, m) = x_velocity.shape
+    kinetic = []
+    for y in range(n):
+        kinetic.append((1 / 2) * (x_velocity[y, x] ** 2 + y_velocity[y, x] ** 2))
+
+    plt.title("Kinetic Energy versus X position", fontsize=20)
+    plt.xlabel("X position", fontsize=15)
+    plt.ylabel("Kinetic Energy", fontsize=15)
+    plt.plot(range(m), kinetic)
+    plt.show()
 
 
 def _plot_velocity_field(x_velocity, y_velocity):
